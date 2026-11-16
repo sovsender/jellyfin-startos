@@ -34,7 +34,8 @@ verified, tried, and decided belongs in the commit message and the PR body.
 
 ## This repo
 
-- **Keep the media mounts `readonly: true`.** That flag, not a convention, is what guarantees Jellyfin cannot alter a library it does not own.
+- **Keep the dependency media mounts `readonly: true`.** That flag, not a convention, is what guarantees Jellyfin cannot alter a library it does not own. Shared-volume mounts take `readonly` from the user's grant instead; never force it to `false`.
+- **Mount shared volumes at `/mnt/shared/<grant id>` outside the package volumes**, with `tryMountSharedVolume`, so an offline volume cannot block startup.
 - **The Plugins action must add and remove only the entries it manages**, or the rest of `config.json`'s plugin list — Jellyfin's own defaults — is dropped.
 - **Adding a media source means editing four places in step:** the enum in `startos/fileModels/store.json.ts`, the multiselect values and description in `startos/actions/mediaSources.ts`, the mount branch in `startos/main.ts`, and a `sdk.Dependency.optional` entry in `startos/dependencies.ts`.
 - **Don't reuse the `main` volume or drop it from the manifest**; the 0.3.5.1 migration reads from it.

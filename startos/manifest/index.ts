@@ -11,6 +11,7 @@ export const manifest = setupManifest({
   donationUrl: 'https://opencollective.com/jellyfin/donate',
   description: i18n.description,
   volumes: ['startos', 'cache', 'config', 'main'],
+  sharedVolumes: true,
   images: {
     jellyfin: {
       source: {

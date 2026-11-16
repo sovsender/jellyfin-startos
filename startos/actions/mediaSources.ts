@@ -16,7 +16,7 @@ export const inputSpec = InputSpec.of({
       nextcloud: i18n('Nextcloud'),
     },
     default: ['nextexplorer'],
-    minLength: 1,
+    minLength: 0,
   }),
 })
 

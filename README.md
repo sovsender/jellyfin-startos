@@ -65,6 +65,8 @@ A `config/migrations.xml` left behind on a dataset whose library database has al
 
 Media arrives from another service as a read-only mount — `/mnt/nextexplorer`, `/mnt/filebrowser`, `/mnt/nextcloud/data` (Nextcloud's user files, not its configuration), or any combination — chosen in [Select Media Sources](#actions).
 
+The manifest sets `sharedVolumes: true` (StartOS 0.4.3). Every shared volume the user grants Jellyfin is mounted at `/mnt/shared/<grant id>` with the grant's own access mode (read-only or read/write); the stable id is used rather than the editable name. Mounts use `SubContainer.tryMountSharedVolume`, so an unavailable volume is skipped with a warning instead of blocking startup. Grants are read with `sdk.getSharedVolumes(effects).const()`, so granting, revoking or changing a volume restarts the service. Shared contents are not backed up with Jellyfin.
+
 ## File Models
 
 Four models: three of Jellyfin's own files, and the package's state.
@@ -126,7 +128,7 @@ The port is bound on the `main` MultiHost and is not masked.
 
 ## Installation and First-Run Flow
 
-Install raises a `critical` task straight away: **Jellyfin will not start until a media source is selected**, because there would be nothing for it to serve. `main` refuses to run with none.
+Install raises a `critical` task straight away: **Jellyfin will not start until a media source is selected or a shared volume is granted**, because there would be nothing for it to serve. `main` refuses to run with neither.
 
 Once a source is chosen and the mount appears, the rest is Jellyfin's own first-run wizard — create the administrator, then add libraries pointing at paths under `/mnt/nextexplorer/<drive>`, `/mnt/filebrowser` or `/mnt/nextcloud/data/<user>/files`.
 
@@ -136,7 +138,7 @@ Two actions, both user-facing.
 
 ### Select Media Sources
 
-Chooses which services are mounted in as media libraries. At least one must be selected.
+Chooses which services are mounted in as media libraries. The selection may be empty when at least one shared volume is granted.
 
 - **What it changes:** `mediaSources` in `store.json`, and through it the package's mount set and dependency set.
 - **Cost:** seconds, then a restart — mounts can only change when the container is recreated.
@@ -183,8 +185,8 @@ Three volumes are copied wholesale — `sdk.Backups.ofVolumes('startos', 'cache'
 
 ## Limitations and Differences
 
-1. **Jellyfin stores no media of its own.** A media source must be selected, and the service will not start without one.
-2. **Media mounts are read-only.** Jellyfin cannot rename, move, or delete anything in your library, and subtitles it saves are kept in its own metadata rather than beside the media.
+1. **Jellyfin stores no media of its own.** A service media source or a granted shared volume must exist, and the service will not start without one.
+2. **Service media mounts are read-only.** Shared volumes follow the grant: read-only unless the user granted read/write. Subtitles Jellyfin saves are kept in its own metadata rather than beside the media.
 3. **Changing the media source restarts the service**, because a container's mounts are fixed for its lifetime.
 4. **Only two plugins are managed here.** Anything else is installed and configured inside Jellyfin.
 5. **The bundled SQLite library is replaced** with an older upstream build, so the server runs on CPUs without SSE4.1. This is a temporary workaround for an upstream issue.

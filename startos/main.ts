@@ -51,9 +51,13 @@ export const main = sdk.setupMain(async ({ effects }) => {
       type: 'file',
     })
 
-  const mediaSources = await store.read((s) => s.mediaSources).const(effects)
+  const mediaSources =
+    (await store.read((s) => s.mediaSources).const(effects)) ?? []
 
-  if (!mediaSources?.length) {
+  // Each grant is a library the user shared with Jellyfin in StartOS; the grant list is reactive.
+  const grants = await sdk.getSharedVolumes(effects).const()
+
+  if (!mediaSources.length && !grants.length) {
     throw new Error(i18n('No media sources'))
   }
 
@@ -89,13 +93,28 @@ export const main = sdk.setupMain(async ({ effects }) => {
 
   let startupComplete = false
 
+  const subcontainer = sdk.SubContainer.of(
+    effects,
+    { imageId: 'jellyfin' },
+    mounts,
+    'jellyfin-sub',
+  )
+
+  // Mounted by the stable grant id, since names are editable. An offline volume is skipped, not fatal.
+  for (const grant of grants) {
+    const outcome = await subcontainer.tryMountSharedVolume({
+      id: grant.id,
+      mountpoint: `/mnt/shared/${grant.id}`,
+      subpath: null,
+      readonly: grant.readonly,
+    })
+    if (outcome.kind === 'unavailable') {
+      console.warn(`Shared volume ${grant.id} unavailable: ${outcome.reason}`)
+    }
+  }
+
   return sdk.Daemons.of(effects).addDaemon('primary', {
-    subcontainer: sdk.SubContainer.of(
-      effects,
-      { imageId: 'jellyfin' },
-      mounts,
-      'jellyfin-sub',
-    ),
+    subcontainer,
     exec: {
       // The SDK calls fn on every respawn, so a restarted Jellyfin is not ready until it logs startup again.
       fn: async () => {
