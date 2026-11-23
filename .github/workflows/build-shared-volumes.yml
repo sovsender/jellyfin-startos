@@ -1,0 +1,85 @@
+name: Build shared-volumes test package
+
+# Test build of the feat/shared-volumes branch. Shared volumes need an SDK and a start-cli
+# newer than any published release, so this builds the SDK from the StartOS 0.4.3-rc.3 source
+# and packs with a start-cli built from the same tag (release `start-cli-rc3` on this repo).
+# It publishes nothing: the package is an artifact for sideloading onto a StartOS 0.4.3 box.
+on:
+  push:
+    branches: ['feat/shared-volumes']
+    paths-ignore: ['*.md']
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  STARTOS_REF: start-os/v0.4.3-rc.3
+  START_CLI_URL: https://github.com/sovsender/jellyfin-startos/releases/download/start-cli-rc3/start-cli
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup build environment
+        uses: Start9Labs/start-technologies/.github/actions/setup-build-env@master
+
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Install start-cli built from the rc.3 source
+        run: |
+          curl -fsSL "$START_CLI_URL" -o /tmp/start-cli
+          sudo install -m 755 /tmp/start-cli /usr/local/bin/start-cli
+          start-cli --version
+
+      - name: Check out the StartOS source
+        uses: actions/checkout@v6
+        with:
+          repository: Start9Labs/start-technologies
+          ref: ${{ env.STARTOS_REF }}
+          path: /tmp/start-technologies
+
+      - name: Build the SDK from source
+        run: |
+          make -C /tmp/start-technologies/projects/start-sdk bundle
+          cd /tmp/start-technologies/projects/start-sdk/dist
+          npm pack --pack-destination /tmp
+          ls -l /tmp/start9labs-start-sdk-*.tgz
+
+      - name: Install package dependencies with that SDK
+        run: |
+          npm pkg set "dependencies.@start9labs/start-sdk=file:$(ls /tmp/start9labs-start-sdk-*.tgz)"
+          npm install --no-package-lock
+          node -p "require('@start9labs/start-sdk/package.json').version"
+
+      - name: Provision signing key
+        env:
+          DEV_KEY: ${{ secrets.DEV_KEY }}
+        run: |
+          mkdir -p ~/.startos .startos
+          if [ -n "$DEV_KEY" ]; then
+            printf '%s' "$DEV_KEY" > ~/.startos/id.key.pem
+          else
+            start-cli init-key
+          fi
+          cp ~/.startos/id.key.pem .startos/build.key.pem
+
+      - name: Build
+        run: make x86
+
+      - name: Check the manifest asks for shared volumes
+        run: |
+          ls -l *.s9pk
+          start-cli s9pk inspect jellyfin_x86_64.s9pk manifest | jq -e '.sharedVolumes == true'
+
+      - uses: actions/upload-artifact@v7
+        with:
+          path: jellyfin_x86_64.s9pk
+          archive: false
+          retention-days: 14
