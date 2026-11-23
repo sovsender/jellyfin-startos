@@ -11,5 +11,9 @@ export const taskSelectMediaSources = sdk.setupOnInit(async (effects) => {
     await sdk.action.createOwnTask(effects, mediaSources, 'critical', {
       reason: i18n('Select where Jellyfin media are stored'),
     })
+  } else {
+    // Granting a shared volume or selecting a source satisfies the task; this handler re-runs on
+    // either change, and a critical task would otherwise keep blocking startup.
+    await sdk.action.clearTask(effects, 'jellyfin:media-sources')
   }
 })
