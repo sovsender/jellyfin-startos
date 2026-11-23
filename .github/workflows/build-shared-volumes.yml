@@ -70,8 +70,18 @@ jobs:
           fi
           cp ~/.startos/id.key.pem .startos/build.key.pem
 
+      # The dependency packages (nextcloud, nextexplorer, filebrowser, tor) are still on SDK 4 and
+      # fail to type-check under SDK 5, so only errors in this package's own files count.
+      - name: Type-check this package
+        run: |
+          npx tsc --noEmit > /tmp/tsc.log 2>&1 || true
+          if grep 'error TS' /tmp/tsc.log | grep -v '^node_modules/'; then
+            echo "::error::type errors in this package"; exit 1
+          fi
+          echo "$(grep -c 'error TS' /tmp/tsc.log) type errors, all inside node_modules"
+
       - name: Build
-        run: make x86
+        run: make x86 TS_CHECK=true
 
       - name: Check the manifest asks for shared volumes
         run: |
